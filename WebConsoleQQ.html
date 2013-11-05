@@ -1,0 +1,182 @@
+<html>
+<head>
+    <title></title>
+</head>
+<body>
+    <script type="text/javascript" src="jquery-1.8.0.min.js"></script>
+    <script type="text/javascript">
+
+    //聊天中易变方法实现
+    function ChatMsgImpl(parent){
+       var that = parent;
+       this.msg = function(msg,to){return {type: "single", to: to, content: [msg,[]], face: 540}}
+       this.sendMsg = function(msg,n){
+           if(that.friends[n] && msg && typeof (msg.toString()) === 'string' && jQuery.trim(msg)){
+               global.QQ.ChatMsg.sendMsg(this.msg(msg.toString(),that.friends[n].id));
+              return true;
+           }else{
+              return false;
+           }
+       };
+       this.findFriends = function(keyWord){
+           var friends=[];
+           if(jQuery.trim(keyWord)){
+               friends = window.frames[0].window.EQQ.Model.BuddyList.searchBuddy(keyWord,5)
+           }else{
+               friends = global.QQ.FriendList;
+           }
+           var temp = []
+           jQuery.each(friends,function(n,o){
+               temp.push({
+                   id:o.uin,
+                   name:o.allName
+               })
+           })
+           return temp;
+       };
+
+        this.getNameById = function (id){
+            var temp = this.findFriends()
+            var name='';
+            jQuery.each(temp,function(n,o){
+                if(id == o.id){
+                    name = o.name;
+                    return;
+                }
+            })
+            return name;
+        }
+
+       this.listMsg=function(n){
+           var self = this;
+           var messages = [];
+           if(n == undefined){
+               jQuery.each(global.QQ.MsgBox,function(index,o){
+                   messages.push({
+                       id:o.from_uin,
+                       msg:o.content[1]?o.content[1].toString():o.content[0],
+                       name:self.getNameById(o.from_uin)
+                   })
+               })
+               return messages;
+           }else if(typeof n === 'number' && that.friends[n]){
+               jQuery.each(global.QQ.MsgBox,function(index,o){
+                   if(Number(o.from_uin) == Number(that.friends[n].id)){
+                       messages.push({
+                           id:o.from_uin,
+                           msg:o.content[1]?o.content[1].toString():o.content[0],
+                           name:that.friends[n].name
+                       })
+                   }
+               })
+               return messages;
+           }else{
+               return messages;
+           }
+
+       }
+    }
+
+
+
+    //聊天定义接口
+    function ChatMsg(){
+        this.impl = new ChatMsgImpl(this);
+        this.messages = [];
+        this.friends = [];
+    }
+
+    ChatMsg.prototype.sendMsg = function(Msg,n){
+        return this.impl.sendMsg(Msg,n);
+    }
+
+    ChatMsg.prototype.findFriends = function(keyWord){
+        this.friends = this.impl.findFriends(keyWord);
+        var result = '';
+        jQuery.each(this.friends,function(n,o){
+            result += '['+n+':'+o.name+']\n';
+        })
+        return result;
+    }
+    ChatMsg.prototype.listMsg = function(n){
+        this.messages = this.impl.listMsg(n);
+        var result = '';
+        jQuery.each(this.messages,function(n,o){
+            result += '['+o.name+':'+o.msg+']\n';
+        })
+        return result;
+    }
+
+    var chat = new ChatMsg();
+
+    //快捷方法
+    function f(keyword){return chat.findFriends(keyword)};
+    function l(number){return chat.listMsg(number)}
+    function s(msg,n){chat.sendMsg(msg,n)}
+
+
+    global.QQ = {};
+    //打补丁具体方法
+    var patch = function(){
+        if(window.frames[0].window.EQQ &&
+                window.frames[0].window.EQQ.Model &&
+                window.frames[0].window.EQQ.Model.BuddyList &&
+                window.frames[0].window.EQQ.Model.ChatMsg &&
+                window.frames[0].window.EQQ.Model.ChatMsg.sendMsg &&
+                window.frames[0].window.EQQ.Model.BuddyList.searchBuddy
+                ){
+            var result = false;
+            /////////////////////////
+            var sm = window.frames[0].window.EQQ.Model.ChatMsg.sendMsg;
+            global.QQ.ChatMsg = null;
+            window.frames[0].window.EQQ.Model.ChatMsg.sendMsg=function (a){
+                console.log('sendMsg-->');
+                global.QQ.ChatMsg = this;
+                sm.call(this,a);
+            }
+            try{ window.frames[0].window.EQQ.Model.ChatMsg.sendMsg() }catch(e){}
+            /////////////////////////
+            var receiveMsg = window.frames[0].window.EQQ.Model.ChatMsg.receiveMsg;
+            global.QQ.MsgBox = [];
+            window.frames[0].window.EQQ.Model.ChatMsg.receiveMsg=function (a){
+                receiveMsg.call(this,a);
+                console.log('receiveMsg-->');
+                global.QQ.MsgBox.push(a);
+            }
+            ////////////////////////////////
+            var searchBuddy  =  window.frames[0].window.EQQ.Model.BuddyList.searchBuddy;
+            window.frames[0].window.EQQ.Model.BuddyList.searchBuddy = function(b,a){
+                console.log('getBuddyList-->');
+                global.QQ.FriendList = this.getBuddyList();
+                return searchBuddy.apply(this,[b,a]);
+            }
+            try{ window.frames[0].window.EQQ.Model.BuddyList.searchBuddy('',5); }catch(e){}
+            ////////////////////////////
+            result = true;
+            console.log('tryPatch:'+result);
+            return result;
+        }
+    }
+
+    //打补丁
+    function tryPatch(time,times,functions){
+        function runBody(){
+            console.log("tryPatch:"+times);
+            if(times && times > 0 && time && functions && !functions() ){
+                setTimeout(run,time);
+                times--;
+            }
+        }
+        function run(){
+            runBody();
+        }
+        runBody();
+    }
+
+    window.onload=function(){ tryPatch(4000,20,patch); }
+
+    </script>
+
+    <iframe onload="" width="100%"height="100%" src="http://web2.qq.com/webqq.html" nwfaketop></iframe>
+</body>
+</html>
